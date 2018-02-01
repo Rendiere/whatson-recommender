@@ -1,7 +1,10 @@
+import os
 import pandas as pd
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from urllib.request import Request, urlopen
+
+SKIP = True
 
 
 class EventScraper():
@@ -38,7 +41,18 @@ class EventScraper():
 
     def run(self):
 
-        for month in ['january', 'february']:
+        months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october',
+                  'november', 'december']
+
+        for month in months:
+            print('\n\nExtracting data for', month)
+
+            f_out = f'data/monthly-events/{month}.csv'
+
+            if os.path.isfile(f_out) and SKIP:
+                print(f'{month} already has extracted data...skipping\n')
+                continue
+
             # Construct the page url
             page_url = f'{self.base_url}/events-in-{month}-2018/'
 
@@ -47,25 +61,33 @@ class EventScraper():
 
             # Get all the articles on the page
             # These are only thumbnails though - we'd need to click through to get the real content
-            event = soup.findAll('article')
+            events = soup.findAll('article')
+
+            print(f'\nFound {len(events)} events')
 
             # For each event, extract the information and store in events_df
             events_data = []
-            for event in event:
-                events_data.append(self.extract_event_info(event))
+            for event in events:
+
+                events_info = self.extract_event_info(event)
+
+                if events_info:
+                    events_data.append(events_info)
 
             self.events_df = pd.DataFrame(events_data)
 
-            print(self.events_df)
-            exit()
+            self.events_df.to_csv(f_out)
 
     def extract_event_info(self, event):
 
         content = self.get_events_data(event)
 
+        if not content:
+            return None
+
         title = content.find('h1', {'class': 'post-title'}).getText().strip()
 
-        print('Extracting : ',title)
+        print('Extracting : ', title)
 
         # Get a dictionary with Cost, Venue and Time
         event_info = self.parse_event_text(content.find_all('p'))
@@ -77,8 +99,6 @@ class EventScraper():
 
         return event_info
 
-
-
     def get_events_data(self, event_thumb):
         """
         Click through on the event url from the thumbnail
@@ -87,11 +107,13 @@ class EventScraper():
         :param event_thumb:
         :return:
         """
-        event_url = event_thumb.find('a', {'class': 'image-link'})['href']
-
-        event_content = self.get_page_content(event_url, extract='article')
-
-        return event_content
+        try:
+            event_url = event_thumb.find('a', {'class': 'image-link'})['href']
+            event_content = self.get_page_content(event_url, extract='article')
+            return event_content
+        except TypeError:
+            print('Could not find event link...')
+            return None
 
     def parse_event_text(self, p_list):
         """
@@ -130,19 +152,19 @@ class EventScraper():
                 lines = text.split('\n')
 
                 if len(lines) > 0:
-
                     for keyword in keywords:
-                        [value] = [line.replace(f'{keyword}: ', '') for line in lines if keyword in line]
-                        event_info[keyword] = value
+                        value = [line.replace(f'{keyword}: ', '') for line in lines if keyword in line]
+                        event_info[keyword] = value[0] if value else None
                 else:
                     print('Couldnt get info')
-                    print('text = ',text)
+                    print('text = ', text)
 
             else:
                 event_info['event_text'].append(text)
 
-        if not event_info['event_text']:
-            raise UserWarning('No event text found!!')
+        if event_info['event_text']:
+            copy_text = event_info['event_text']
+            event_info['event_text'] = '\n'.join(copy_text)
 
         return event_info
 
