@@ -7,7 +7,12 @@ name = "pypi"
 
 [packages]
 
-"urllib3" = "*"
+"beautifulsoup4" = "*"
+pandas = "*"
+numpy = "*"
+sklearn = "*"
+scipy = "*"
+nltk = "*"
 
 
 [dev-packages]
